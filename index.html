@@ -348,7 +348,8 @@
             win: 'kachow.mp3', 
             lose: 'kachigga.mp3',
             engine: 'engine.mp3',   // Continuous engine sound
-            screech: 'screech.mp3'  // Tire screech on turns
+            screech: 'screech.mp3', // Tire screech on turns
+            crash: 'crash.mp3'      // ADDED: Sound for smash/crash
         };
 
         // --- TRACK CONFIG (Procedural Colors) ---
@@ -457,8 +458,13 @@
         screechSnd.loop = true; 
         screechSnd.volume = 0.6; 
 
+        const crashSnd = new Audio(audioAssets.crash); // NEW Crash Sound
+
         function playSound(snd) {
-            if(!isMuted) snd.play().catch(() => {});
+            if(!isMuted) {
+                snd.currentTime = 0;
+                snd.play().catch(() => {});
+            }
         }
 
         function toggleMute() {
@@ -677,7 +683,16 @@
                         coinCount = 0; 
                         updatePowerUI();
                         invincibilityTimer = 20;
-                        spawnExplosion(e.x + e.w/2, e.y + e.h/2, 'cyan');
+                        
+                        // --- SMASH EFFECT ---
+                        playSound(crashSnd); // Sound
+                        spawnCrashEffect(e.x + e.w/2, e.y + e.h/2); // Visual
+                        
+                        // --- MODIFICAT: Crește scorul la distrugere ---
+                        score++;
+                        document.getElementById('score').innerText = score;
+                        if(score >= targetScore) endGame(true);
+
                         continue;
                     } else {
                         endGame(false);
@@ -767,21 +782,75 @@
             // Particles
             for(let p of particles) {
                 ctx.fillStyle = p.c;
-                ctx.fillRect(p.x, p.y, p.s, p.s);
+                if(p.type === 'star') {
+                    drawStar(ctx, p.x, p.y, 5, p.s, p.s/2);
+                } else if(p.type === 'spark') {
+                    ctx.fillRect(p.x, p.y, p.s, p.s); // Sparks are just fast small rects
+                } else {
+                    ctx.fillRect(p.x, p.y, p.s, p.s); // Confetti
+                }
             }
         }
 
         // --- EFFECTS ---
-        function spawnExplosion(x, y, color) {
-            for(let i=0; i<15; i++) {
-                particles.push({x:x, y:y, vx:(Math.random()-0.5)*10, vy:(Math.random()-0.5)*10, s:Math.random()*5+2, c:color, life:20});
+        // Helper to draw a star
+        function drawStar(ctx, cx, cy, spikes, outerRadius, innerRadius) {
+            let rot = Math.PI / 2 * 3;
+            let x = cx;
+            let y = cy;
+            let step = Math.PI / spikes;
+
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - outerRadius);
+            for (let i = 0; i < spikes; i++) {
+                x = cx + Math.cos(rot) * outerRadius;
+                y = cy + Math.sin(rot) * outerRadius;
+                ctx.lineTo(x, y);
+                rot += step;
+
+                x = cx + Math.cos(rot) * innerRadius;
+                y = cy + Math.sin(rot) * innerRadius;
+                ctx.lineTo(x, y);
+                rot += step;
+            }
+            ctx.lineTo(cx, cy - outerRadius);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        function spawnCrashEffect(x, y) {
+            // Stars
+            for(let i=0; i<10; i++) {
+                particles.push({
+                    x: x, y: y,
+                    vx: (Math.random()-0.5)*15,
+                    vy: (Math.random()-0.5)*15,
+                    s: Math.random()*10+5,
+                    c: 'yellow',
+                    life: 40,
+                    type: 'star'
+                });
+            }
+            // Sparks (lines/dots)
+            for(let i=0; i<20; i++) {
+                particles.push({
+                    x: x, y: y,
+                    vx: (Math.random()-0.5)*20,
+                    vy: (Math.random()-0.5)*20,
+                    s: Math.random()*3+1,
+                    c: 'orange',
+                    life: 30,
+                    type: 'spark'
+                });
             }
         }
+
         function spawnConfetti() {
             for(let i=0; i<50; i++) {
-                particles.push({x:Math.random()*GW, y:-10, vx:0, vy:Math.random()*5+2, s:8, c:`hsl(${Math.random()*360},100%,50%)`, life:200});
+                particles.push({x:Math.random()*GW, y:-10, vx:0, vy:Math.random()*5+2, s:8, c:`hsl(${Math.random()*360},100%,50%)`, life:200, type:'confetti'});
             }
         }
+
         function updateParticles() {
             for(let i=particles.length-1; i>=0; i--) {
                 let p = particles[i];
@@ -814,8 +883,10 @@
                 msg.innerText = "CRASH!";
                 msg.style.color = "#ff5252";
                 overlay.style.borderColor = "#ff5252";
-                playSound(kachingaSnd);
-                spawnExplosion(playerX + P_WIDTH/2, playerY + P_HEIGHT/2, 'orange');
+                
+                playSound(crashSnd); // Play Crash Sound
+                spawnCrashEffect(playerX + P_WIDTH/2, playerY + P_HEIGHT/2); // Visuals
+                playSound(kachingaSnd); // Voice line
             }
             overlay.style.display = 'block';
         }
