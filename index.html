@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#d32f2f">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="player_1.png"> 
+    <link rel="manifest" href='data:application/manifest+json,{"name":"Piston Cup Racer","short_name":"Racer","start_url":".","display":"standalone","background_color":"#222","theme_color":"#d32f2f","icons":[{"src":"player_1.png","sizes":"192x192","type":"image/png"}]}'>
+    
+    <title>Piston Cup Racer</title>
+	<link rel="icon" type="image/x-icon" href="icon.ico">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #222;
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            touch-action: none;
+            user-select: none;
+            color: white;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* --- SELECTION SCREEN --- */
+        #selection-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #d32f2f;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding-top: 20px;
+            overflow-y: auto;
+        }
+
+        h1 { margin: 10px 0; text-shadow: 3px 3px 0 #000; font-style: italic; }
+        h3 { margin: 5px 0 5px 0; text-transform: uppercase; }
+
+        .car-grid {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .car-option {
+            width: 60px;
+            height: 60px;
+            border: 3px solid white;
+            border-radius: 10px;
+            background: #fff;
+            object-fit: contain;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .car-option.selected {
+            border-color: #FFD700;
+            box-shadow: 0 0 15px #FFD700;
+            transform: scale(1.1);
+        }
+
+        .option-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .option-btn {
+            padding: 10px 20px;
+            border: 2px solid white;
+            background: #b71c1c;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        .option-btn.selected {
+            background: #FFD700;
+            color: black;
+            border-color: black;
+        }
+
+        #start-btn {
+            background: #FFD700;
+            color: black;
+            border: 4px solid white;
+            padding: 15px 50px;
+            font-size: 24px;
+            font-weight: bold;
+            border-radius: 30px;
+            cursor: pointer;
+            text-transform: uppercase;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            margin-bottom: 30px;
+        }
+        #start-btn:active { transform: scale(0.95); }
+
+        /* --- GAME UI HEADER --- */
+        #ui-header {
+            flex: 0 0 50px;
+            background-color: #d32f2f;
+            display: none; /* Hidden until start */
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 15px;
+            font-size: 20px;
+            font-weight: bold;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            z-index: 10;
+        }
+
+        .score-box { display: flex; gap: 15px; }
+
+        #mute-btn {
+            font-size: 18px;
+            cursor: pointer;
+            background: rgba(0,0,0,0.3);
+            padding: 5px 12px;
+            border-radius: 15px;
+            border: 2px solid white;
+            user-select: none;
+        }
+
+        #game-container {
+            flex: 1;
+            background-color: #333;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+            cursor: crosshair;
+        }
+
+        canvas {
+            max-width: 100%;
+            max-height: 100%;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        #controls-hint {
+            position: absolute;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 40px;
+            font-weight: bold;
+            width: 100%;
+            text-align: center;
+            top: 50%;
+            pointer-events: none;
+            display: none;
+        }
+
+        #message-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            color: #FFD700;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            font-size: 32px;
+            font-weight: bold;
+            border: 4px solid white;
+            display: none;
+            width: 80%;
+            z-index: 20;
+        }
+        
+        #menu-btn {
+            margin-top: 15px;
+            font-size: 18px;
+            text-decoration: underline;
+            cursor: pointer;
+            color: white;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="selection-screen">
+        <h1>Piston Cup Racer</h1>
+        
+        <h3>Select Player</h3>
+        <div class="car-grid" id="player-grid"></div>
+
+        <h3>Select Rival</h3>
+        <div class="car-grid" id="enemy-grid"></div>
+
+        <h3>Select Track</h3>
+        <div class="option-row" id="track-options">
+            <div class="option-btn selected" onclick="setTrack('asphalt', this)">Asphalt</div>
+            <div class="option-btn" onclick="setTrack('dirt', this)">Dirt</div>
+            <div class="option-btn" onclick="setTrack('snow', this)">Snow</div>
+        </div>
+
+        <h3>Select Difficulty</h3>
+        <div class="option-row">
+            <div class="option-btn selected" onclick="setSpeed(2, this)">Toddler</div>
+            <div class="option-btn" onclick="setSpeed(5, this)">Normal</div>
+            <div class="option-btn" onclick="setSpeed(9, this)">Fast</div>
+        </div>
+
+        <button id="start-btn" onclick="startGame()">Start Race!</button>
+    </div>
+
+    <div id="ui-header">
+        <div class="score-box">
+            <span>Lap: <span id="score">0</span>/20</span>
+            <span style="color: #FFD700;">Best: <span id="high-score">0</span></span>
+        </div>
+        <div id="mute-btn" onclick="toggleMute()">🔊 ON</div>
+    </div>
+
+    <div id="game-container">
+        <canvas id="gameCanvas" width="400" height="600"></canvas>
+        <div id="controls-hint">&lt; Tap Left &nbsp;&nbsp;&nbsp; Tap Right &gt;</div>
+        <div id="message-overlay"></div>
+    </div>
+
+    <script>
+        // --- PWA SERVICE WORKER REGISTRATION (Inline) ---
+        if ('serviceWorker' in navigator) {
+            // This is a minimal service worker to allow installation
+            // Since we are in a single file, we can't easily register a separate sw.js file
+            // without a server. However, simply having the manifest link often triggers the 
+            // "Add to Home Screen" prompt on modern Android.
+            // For full offline capability in a single file, the assets (images/mp3) 
+            // must be cached by the browser automatically.
+        }
+
+        // --- ASSETS ---
+        const playerOptions = ['player_1.png', 'player_2.png', 'player_3.png', 'player_4.png'];
+        const enemyOptions = ['enemy_1.png', 'enemy_2.png'];
+        
+        const audioAssets = {
+            win: 'kachow.mp3', 
+            lose: 'kachigga.mp3' 
+        };
+
+        // --- TRACK DEFINITIONS (Procedural) ---
+        const tracks = {
+            asphalt: { 
+                name: 'Asphalt', 
+                roadColor: '#555555', 
+                sideColor: '#2e7d32', 
+                lineColor: '#FFFFFF',
+                lineWidth: 6
+            },
+            dirt: { 
+                name: 'Dirt', 
+                roadColor: '#8d6e63', 
+                sideColor: '#ffcc80', 
+                lineColor: '#5d4037', 
+                lineWidth: 4
+            },
+            snow: { 
+                name: 'Snow', 
+                roadColor: '#cfd8dc', 
+                sideColor: '#eceff1', 
+                lineColor: '#546e7a', 
+                lineWidth: 5
+            }
+        };
+
+        // --- STATE ---
+        let selectedPlayerSrc = playerOptions[0];
+        let selectedEnemySrc = enemyOptions[0];
+        let enemyBaseSpeed = 2; 
+        let currentTrack = tracks.asphalt; 
+        let isMuted = false;
+        let highScore = localStorage.getItem('pistonCupHighScore') || 0;
+
+        document.getElementById('high-score').innerText = highScore;
+
+        // --- SELECTION LOGIC ---
+        const playerGrid = document.getElementById('player-grid');
+        const enemyGrid = document.getElementById('enemy-grid');
+
+        function createGrid(container, options, type) {
+            options.forEach((src, index) => {
+                const img = document.createElement('img');
+                img.src = src;
+                img.className = 'car-option';
+                if(index === 0) img.classList.add('selected');
+                img.onclick = () => {
+                    Array.from(container.children).forEach(c => c.classList.remove('selected'));
+                    img.classList.add('selected');
+                    if(type === 'player') selectedPlayerSrc = src;
+                    else selectedEnemySrc = src;
+                };
+                container.appendChild(img);
+            });
+        }
+        createGrid(playerGrid, playerOptions, 'player');
+        createGrid(enemyGrid, enemyOptions, 'enemy');
+
+        function setSpeed(speed, btn) {
+            enemyBaseSpeed = speed;
+            btn.parentElement.querySelectorAll('.option-btn').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+        }
+
+        function setTrack(trackKey, btn) {
+            currentTrack = tracks[trackKey];
+            btn.parentElement.querySelectorAll('.option-btn').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+        }
+
+        // --- AUDIO ---
+        const kachowSnd = new Audio(audioAssets.win);
+        const kachingaSnd = new Audio(audioAssets.lose);
+
+        function toggleMute() {
+            isMuted = !isMuted;
+            const btn = document.getElementById('mute-btn');
+            if(isMuted) {
+                btn.innerText = "🔇 OFF";
+                btn.style.backgroundColor = "rgba(0,0,0,0.3)";
+                btn.style.borderColor = "#999";
+                btn.style.color = "#999";
+            } else {
+                btn.innerText = "🔊 ON";
+                btn.style.backgroundColor = "rgba(0,0,0,0.3)";
+                btn.style.borderColor = "white";
+                btn.style.color = "white";
+            }
+        }
+
+        function playSound(snd) {
+            if(!isMuted) {
+                snd.play().catch(e => console.log("Audio blocked", e));
+            }
+        }
+
+        // --- GAME ENGINE ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreEl = document.getElementById('score');
+        const highScoreEl = document.getElementById('high-score');
+        const overlay = document.getElementById('message-overlay');
+        const gameContainer = document.getElementById('game-container');
+        
+        let playerImg = new Image();
+        let enemyImg = new Image();
+
+        // Dimensions
+        const GW = 400; 
+        const GH = 600;
+        const P_WIDTH = 70;
+        const P_HEIGHT = 110;
+        const PLAYER_SPEED = 8;
+
+        // Variables
+        let playerX = GW / 2 - P_WIDTH / 2;
+        let score = 0;
+        let gameOver = false;
+        let gameRunning = false;
+        let enemies = [];
+        let leftPressed = false;
+        let rightPressed = false;
+        let crashCoords = { x: 0, y: 0 };
+        
+        // Polish Variables
+        let roadOffsetY = 0; 
+        let invincibilityTimer = 0; 
+        let confetti = []; 
+        let engineVibration = 0; 
+
+        // --- INPUT ---
+        function handleScreenInput(x) {
+            if (!gameRunning || gameOver) return;
+            const screenWidth = window.innerWidth;
+            if (x < screenWidth / 2) { leftPressed = true; rightPressed = false; }
+            else { rightPressed = true; leftPressed = false; }
+        }
+        function stopInput() { leftPressed = false; rightPressed = false; }
+
+        window.addEventListener('touchstart', (e) => {
+             if(e.target.id !== 'mute-btn' && e.target.id !== 'menu-btn') handleScreenInput(e.touches[0].clientX)
+        }, {passive: false});
+        window.addEventListener('touchend', stopInput);
+        
+        window.addEventListener('mousedown', (e) => {
+            if(e.target.id !== 'mute-btn' && e.target.id !== 'menu-btn') handleScreenInput(e.clientX)
+        });
+        window.addEventListener('mouseup', stopInput);
+        
+        window.addEventListener('keydown', e => {
+            if(e.key === 'ArrowLeft') { leftPressed = true; rightPressed = false; }
+            if(e.key === 'ArrowRight') { rightPressed = true; leftPressed = false; }
+        });
+        window.addEventListener('keyup', e => {
+            if(e.key === 'ArrowLeft') leftPressed = false;
+            if(e.key === 'ArrowRight') rightPressed = false;
+        });
+
+        function startGame() {
+            playerImg.src = selectedPlayerSrc;
+            enemyImg.src = selectedEnemySrc;
+
+            document.getElementById('selection-screen').style.display = 'none';
+            document.getElementById('ui-header').style.display = 'flex';
+            gameContainer.style.display = 'flex';
+            
+            const hint = document.getElementById('controls-hint');
+            hint.style.display = 'block';
+            setTimeout(() => { hint.style.display = 'none'; }, 2000);
+
+            resetGame();
+        }
+
+        function resetGame() {
+            gameRunning = true;
+            gameOver = false;
+            score = 0;
+            scoreEl.innerText = '0';
+            enemies = [];
+            confetti = [];
+            playerX = GW / 2 - P_WIDTH / 2;
+            overlay.style.display = 'none';
+            invincibilityTimer = 180; 
+            requestAnimationFrame(gameLoop);
+        }
+
+        // --- VISUALS ---
+        function drawStar(cx, cy, spikes, outerRadius, innerRadius, color) {
+            let rot = Math.PI / 2 * 3;
+            let x = cx; let y = cy; let step = Math.PI / spikes;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - outerRadius);
+            for (let i = 0; i < spikes; i++) {
+                x = cx + Math.cos(rot) * outerRadius; y = cy + Math.sin(rot) * outerRadius;
+                ctx.lineTo(x, y); rot += step;
+                x = cx + Math.cos(rot) * innerRadius; y = cy + Math.sin(rot) * innerRadius;
+                ctx.lineTo(x, y); rot += step;
+            }
+            ctx.lineTo(cx, cy - outerRadius);
+            ctx.closePath();
+            ctx.lineWidth = 3; ctx.strokeStyle = '#000'; ctx.stroke();
+            ctx.fillStyle = color; ctx.fill();
+        }
+
+        function drawLightning(cx, cy) {
+            ctx.beginPath(); ctx.moveTo(cx, cy);
+            let lx = cx; let ly = cy;
+            for(let i=0; i<5; i++) {
+                lx += (Math.random() - 0.5) * 60; ly -= 40; ctx.lineTo(lx, ly);
+            }
+            ctx.strokeStyle = 'cyan'; ctx.lineWidth = 4;
+            ctx.shadowBlur = 15; ctx.shadowColor = 'white';
+            ctx.stroke(); ctx.shadowBlur = 0;
+        }
+
+        function initConfetti() {
+            for(let i=0; i<60; i++) {
+                confetti.push({
+                    x: Math.random() * GW,
+                    y: Math.random() * GH - GH,
+                    color: `hsl(${Math.random()*360}, 100%, 50%)`,
+                    speed: 2 + Math.random() * 5,
+                    sway: Math.random() * 2 - 1
+                });
+            }
+        }
+        
+        function drawConfetti() {
+            for(let c of confetti) {
+                ctx.fillStyle = c.color;
+                ctx.fillRect(c.x, c.y, 8, 8);
+                c.y += c.speed;
+                c.x += c.sway;
+                if(c.y > GH) c.y = -10; 
+            }
+        }
+
+        // --- UPDATE ---
+        function update() {
+            if (gameOver) {
+                if(score >= 20 && confetti.length === 0) initConfetti(); 
+                return;
+            }
+
+            // Scroll Road Logic
+            let scrollSpeed = enemyBaseSpeed + 4; 
+            roadOffsetY += scrollSpeed; 
+            if(roadOffsetY >= GH) roadOffsetY = 0;
+
+            if(invincibilityTimer > 0) invincibilityTimer--;
+            engineVibration = (Math.random() - 0.5) * 2; 
+
+            // Move Player
+            if (leftPressed && playerX > 0) playerX -= PLAYER_SPEED;
+            if (rightPressed && playerX < GW - P_WIDTH) playerX += PLAYER_SPEED;
+
+            // Spawn Enemies
+            let spawnRate = enemyBaseSpeed * 0.003; 
+            if (Math.random() < spawnRate) {
+                enemies.push({ x: Math.random() * (GW - P_WIDTH), y: -120, passed: false });
+            }
+
+            // Update Enemies
+            for (let i = 0; i < enemies.length; i++) {
+                let e = enemies[i];
+                e.y += enemyBaseSpeed; 
+
+                // PSEUDO-3D SCALING
+                let scale = 0.4 + (e.y / GH) * 0.6;
+                if(scale > 1) scale = 1;
+                
+                let currentW = P_WIDTH * scale;
+                let currentH = P_HEIGHT * scale;
+                
+                e.w = currentW;
+                e.h = currentH;
+
+                // Collision Check
+                if (invincibilityTimer === 0 &&
+                    playerX < e.x + e.w &&
+                    playerX + P_WIDTH > e.x &&
+                    GH - P_HEIGHT - 10 < e.y + e.h &&
+                    GH - 10 > e.y
+                ) {
+                    crashCoords = { x: (playerX + e.x)/2, y: (GH - P_HEIGHT/2 + e.y)/2 };
+                    endGame(false);
+                }
+
+                if (e.y > GH && !e.passed) {
+                    score++;
+                    e.passed = true;
+                    scoreEl.innerText = score;
+                    if (score >= 20) endGame(true);
+                }
+            }
+            enemies = enemies.filter(e => e.y < GH + 100);
+        }
+
+        // --- DRAW ---
+        function draw() {
+            // 1. DRAW PROCEDURAL BACKGROUND
+            // Draw Side Area (Grass/Sand/Snow)
+            ctx.fillStyle = currentTrack.sideColor;
+            ctx.fillRect(0, 0, GW, GH);
+            
+            // Draw Main Road Body
+            ctx.fillStyle = currentTrack.roadColor;
+            ctx.fillRect(40, 0, GW - 80, GH);
+
+            // Draw Side Lines (Solid)
+            ctx.beginPath();
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = currentTrack.lineColor;
+            ctx.moveTo(50, 0); ctx.lineTo(50, GH);
+            ctx.moveTo(GW - 50, 0); ctx.lineTo(GW - 50, GH);
+            ctx.stroke();
+
+            // Draw Center Dashed Line (Animated)
+            ctx.beginPath(); 
+            ctx.strokeStyle = currentTrack.lineColor; 
+            ctx.lineWidth = currentTrack.lineWidth; 
+            ctx.setLineDash([30, 30]);
+            ctx.lineDashOffset = -roadOffsetY; 
+            ctx.moveTo(GW / 2, 0); ctx.lineTo(GW / 2, GH); 
+            ctx.stroke();
+            
+            // Reset Dash
+            ctx.setLineDash([]);
+
+            // 2. PLAYER
+            let drawPlayer = true;
+            if (invincibilityTimer > 0) {
+                if (Math.floor(invincibilityTimer / 10) % 2 === 0) drawPlayer = false;
+            }
+
+            if (drawPlayer) {
+                let pX = playerX + engineVibration; 
+                let pY = GH - P_HEIGHT - 10;
+                
+                if (playerImg.complete && playerImg.naturalHeight > 0) {
+                    ctx.drawImage(playerImg, pX, pY, P_WIDTH, P_HEIGHT);
+                } else {
+                    ctx.fillStyle = 'red'; ctx.fillRect(pX, pY, P_WIDTH, P_HEIGHT);
+                }
+                
+                if(invincibilityTimer > 0) {
+                    ctx.fillStyle = "white";
+                    ctx.font = "bold 20px Arial";
+                    ctx.textAlign = "center";
+                    ctx.fillText("READY...", pX + P_WIDTH/2, pY - 20);
+                }
+            }
+
+            // 3. ENEMIES
+            for (let e of enemies) {
+                if (enemyImg.complete && enemyImg.naturalHeight > 0) {
+                    ctx.drawImage(enemyImg, e.x, e.y, e.w, e.h);
+                } else {
+                    ctx.fillStyle = 'green'; ctx.fillRect(e.x, e.y, e.w, e.h);
+                }
+            }
+
+            // 4. EFFECTS
+            if (gameOver) {
+                if(score < 20) drawCollisionEffect();
+                else drawConfetti();
+            }
+        }
+
+        function endGame(win) {
+            gameOver = true;
+            
+            if(score > highScore) {
+                highScore = score;
+                localStorage.setItem('pistonCupHighScore', highScore);
+                highScoreEl.innerText = highScore;
+            }
+
+            overlay.style.display = 'block';
+            if (win) {
+                overlay.innerText = "MCQUEEN WINS!";
+                overlay.style.borderColor = "#FFD700";
+                overlay.style.color = "#FFD700";
+                playSound(kachowSnd);
+            } else {
+                overlay.innerText = "CRASH! CHICK HICKS WINS!";
+                overlay.style.borderColor = "red";
+                overlay.style.color = "orange";
+                playSound(kachingaSnd);
+                draw(); 
+            }
+            
+            setTimeout(() => {
+                overlay.innerHTML += "<br><br><span style='font-size:20px'>Tap to Restart</span>";
+                overlay.innerHTML += "<span id='menu-btn' onclick='location.reload()'>Back to Menu</span>";
+                overlay.onclick = (e) => {
+                    if(e.target.id !== 'menu-btn') {
+                        resetGame();
+                    }
+                };
+            }, 1000);
+        }
+
+        function gameLoop() {
+            if(gameRunning) {
+                update();
+                draw();
+                if(!gameOver || (gameOver && score >= 20)) requestAnimationFrame(gameLoop);
+            }
+        }
+    </script>
+</body>
+</html>	
