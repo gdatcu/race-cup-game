@@ -297,7 +297,7 @@
 
             <h3>Speed</h3>
             <div class="option-row">
-                <button class="option-btn selected" onclick="setSpeed(2, 'Toddler', this)">Toddler</button>
+                <button class="option-btn selected" onclick="setSpeed(1, 'Toddler', this)">Toddler</button>
                 <button class="option-btn" onclick="setSpeed(5, 'Normal', this)">Normal</button>
                 <button class="option-btn" onclick="setSpeed(9, 'Fast', this)">Fast</button>
             </div>
@@ -317,7 +317,7 @@
             
             <div class="score-display">
                 <span class="lbl">LAP</span>
-                <span class="val"><span id="score">0</span>/20</span>
+                <span class="val"><span id="score">0</span>/<span id="target-score">20</span></span>
             </div>
             
             <div class="power-wrapper">
@@ -347,8 +347,8 @@
         const audioAssets = { 
             win: 'kachow.mp3', 
             lose: 'kachigga.mp3',
-            engine: 'engine.mp3',   // ADDED: Continuous engine sound
-            screech: 'screech.mp3'  // ADDED: Tire screech on turns
+            engine: 'engine.mp3',   // Continuous engine sound
+            screech: 'screech.mp3'  // Tire screech on turns
         };
 
         // --- TRACK CONFIG (Procedural Colors) ---
@@ -371,9 +371,13 @@
         let selectedPlayerSrc = playerOptions[0];
         let selectedEnemySrc = enemyOptions[0];
         let currentTrack = tracks.asphalt;
-        let enemyBaseSpeed = 2;
+        let enemyBaseSpeed = 2; // Default (will be updated)
         let difficultyName = 'Toddler';
+        let targetScore = 5; // Default Toddler target
         let isMuted = false;
+        
+        // BUG FIX: Variable to store the animation loop ID to prevent double speed on restart
+        let animationId = null;
 
         // --- UI LOGIC ---
         const playerGrid = document.getElementById('player-grid');
@@ -407,6 +411,15 @@
         function setSpeed(speed, name, btn) {
             enemyBaseSpeed = speed;
             difficultyName = name;
+            
+            // Setări speciale pentru Toddler (mai ușor de câștigat)
+            if (name === 'Toddler') {
+                targetScore = 5; 
+            } else {
+                targetScore = 20; 
+            }
+            document.getElementById('target-score').innerText = targetScore;
+
             btn.parentElement.querySelectorAll('.option-btn').forEach(b => b.classList.remove('selected'));
             btn.classList.add('selected');
             diffLabel.innerText = name;
@@ -419,7 +432,8 @@
             btn.classList.add('selected');
         }
 
-        updateHighScoreDisplay();
+        // Inițializare corectă la load
+        setSpeed(1, 'Toddler', document.querySelector('.option-row .option-btn')); 
 
         // --- GAME ENGINE ---
         const canvas = document.getElementById('gameCanvas');
@@ -435,14 +449,12 @@
         // Sounds
         const kachowSnd = new Audio(audioAssets.win);
         const kachingaSnd = new Audio(audioAssets.lose);
-        
-        // NEW AUDIO OBJECTS
         const engineSnd = new Audio(audioAssets.engine);
-        engineSnd.loop = true; // Engine loops forever while driving
-        engineSnd.volume = 0.4; // Slightly lower volume for background
+        engineSnd.loop = true; 
+        engineSnd.volume = 0.4; 
 
         const screechSnd = new Audio(audioAssets.screech);
-        screechSnd.loop = true; // Loop so it continues during long turns
+        screechSnd.loop = true; 
         screechSnd.volume = 0.6; 
 
         function playSound(snd) {
@@ -535,6 +547,9 @@
         }
 
         function resetGame() {
+            // BUG FIX: Cancel previous loop if exists to prevent 2x speed
+            if(animationId) cancelAnimationFrame(animationId);
+
             gameRunning = true;
             gameOver = false;
             score = 0;
@@ -563,7 +578,9 @@
             }
 
             invincibilityTimer = 180; // 3 seconds safety
-            requestAnimationFrame(gameLoop);
+            
+            // Start the single loop
+            gameLoop();
         }
 
         function updatePowerUI() {
@@ -585,13 +602,15 @@
         }
 
         function update() {
-            // Scroll
-            let speed = (gameOver ? 0 : enemyBaseSpeed + 4);
+            // Scroll logic
+            let baseScroll = (difficultyName === 'Toddler') ? 2 : 4;
+            let speed = (gameOver ? 0 : enemyBaseSpeed + baseScroll);
+            
             roadOffsetY += speed;
             if(roadOffsetY >= GH) roadOffsetY = 0;
 
             if (gameOver) {
-                if(score >= 20 && particles.length === 0) spawnConfetti();
+                if(score >= targetScore && particles.length === 0) spawnConfetti();
                 updateParticles();
                 return;
             }
@@ -608,7 +627,6 @@
                 playerY += diffY * 0.15;
 
                 // --- SOUND LOGIC: SCREECHING ---
-                // If moving fast on X AND Y (Diagonal Movement)
                 if(!isMuted && Math.abs(diffX) > 8 && Math.abs(diffY) > 8) {
                     if(screechSnd.paused) screechSnd.play().catch(()=>{});
                 } else {
@@ -627,7 +645,7 @@
 
             // Spawn
             if(Math.random() < (enemyBaseSpeed * 0.003)) {
-                enemies.push({ x: Math.random() * (GW - P_WIDTH - 40) + 20, y: -120 });
+                enemies.push({ x: Math.random() * (GW - P_WIDTH - 40) + 20, y: -120, passed: false });
             }
             if(Math.random() < 0.005) {
                 coins.push({ x: Math.random() * (GW - 40) + 20, y: -50, w:30, h:30, collected:false });
@@ -666,11 +684,17 @@
                     }
                 }
 
-                if(e.y > GH) {
-                    if(!e.passed) { score++; e.passed = true; document.getElementById('score').innerText = score; }
-                    if(score >= 20) endGame(true);
+                // --- NEW SCORE LOGIC (No Lag) ---
+                // Count score when enemy top is physically below player bottom (passed)
+                if(!e.passed && e.y > playerY + P_HEIGHT) {
+                    score++; 
+                    e.passed = true; 
+                    document.getElementById('score').innerText = score;
+                    
+                    if(score >= targetScore) endGame(true);
                 }
             }
+            // Just cleanup off-screen enemies
             enemies = enemies.filter(e => e.y < GH + 100);
 
             // Coins
@@ -799,7 +823,8 @@
         function gameLoop() {
             update();
             draw();
-            requestAnimationFrame(gameLoop); // ALWAYS run loop to prevent freeze feeling
+            // Store the ID so we can cancel it on reset
+            animationId = requestAnimationFrame(gameLoop); 
         }
 
         // --- PWA SERVICE WORKER REGISTRATION ---
